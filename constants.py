@@ -1,6 +1,6 @@
 import os
 
-model_sr = 32000
+model_sr = 22050
 frame_length = 5*model_sr
 frame_step = 5*model_sr
 fixed_num_frames = 12

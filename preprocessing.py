@@ -1,6 +1,7 @@
 import librosa
 import math
 import matplotlib.pyplot as plt
+import numpy as np
 import os
 import pickle
 import random
@@ -31,6 +32,17 @@ def load_audio_tensor(filename, primary_label):
     # x = tfio.audio.decode_mp3(x)
     # x = tfio.audio.resample(x, in_sr, constants.model_sr)
     x = x[:, 0]
+
+    # x = np.trim_zeros(x.numpy())
+    # x = tf.constant(x)
+
+    non_zero = tf.where(x)
+    first = non_zero[0][0]
+    last = non_zero[-1][0]
+    x = x[first:last]
+    # x = x - tf.reduce_mean(x)  # TO DO:  uncomment so that DC component is removed
+
+    x = x / tf.reduce_max(tf.math.abs(x))
     return x, primary_label
 
 def shift_audio(audio, label):
@@ -38,6 +50,23 @@ def shift_audio(audio, label):
     # shift = tf.py_function(lambda x: random.randint(0, x), [len(audio)], tf.int32)
     audio_shifted = tf.concat([audio[shift:], audio[:shift]], axis=0)    
     return audio_shifted, label
+
+def chop_audio(audio, label):
+    """Remove a random amount of data from the beginning of the audio
+
+    This relates to Srengel et al's approach by allowing for different start points for a clip.
+
+    Args:
+        audio: input
+        label: class id
+    """
+    if len(audio)>constants.frame_length:
+        max_chop = len(audio)-constants.frame_length
+        chop_samples = tf.random.uniform((), 0, len(audio), dtype=tf.int32)
+        # shift = tf.py_function(lambda x: random.randint(0, x), [len(audio)], tf.int32)
+        return audio[chop_samples:], label
+    else:
+        return audio, label
 
 def match_lengths(orig_audio, other_audio):
     len_orig = len(orig_audio)
@@ -49,6 +78,18 @@ def match_lengths(orig_audio, other_audio):
     return other_audio
 
 def combine_recordings(orig_audio, label, index_filename_list, weight=None):
+    """Add recordings with the same label
+
+    (See Srengel et al., "Audio based bird species identification using deep learning techniques",
+     CLEF2016 Working Notes,
+     https://ceur-ws.org/Vol-1609/16090547.pdf)
+
+    Args:
+        orig_audio: Audio to augment
+        label: class id
+        index_filename_list: list of filename lists (a list for each possible class id)
+        weight: weight to apply to orig_audio [Default: random value in [.5, 1.]
+    """
     len_orig = len(orig_audio)
     
     other_file = tf.py_function(lambda x: random.choices(index_filename_list[x]),
@@ -66,11 +107,11 @@ def combine_recordings(orig_audio, label, index_filename_list, weight=None):
     return augment_audio, label
 
 def frame_audio(audio, label):
-    num_samples = len(audio)
-    num_repeats = tf.py_function(math.ceil, [constants.fixed_num_samples/num_samples], tf.int32)
-    if num_repeats > 1:
-        audio = tf.tile(audio, (num_repeats,) )
-    if len(audio)>constants.fixed_num_samples:
-        audio = audio[:constants.fixed_num_samples]
-    audio = tf.signal.frame(audio, frame_length=constants.frame_length, frame_step=constants.frame_step)
-    return audio, label
+    # num_samples = len(audio)
+    # num_repeats = tf.py_function(math.ceil, [constants.fixed_num_samples/num_samples], tf.int32)
+    # if num_repeats > 1:
+    #     audio = tf.tile(audio, (num_repeats,) )
+    # if len(audio)>constants.fixed_num_samples:
+    #     audio = audio[:constants.fixed_num_samples]
+    audio = tf.signal.frame(audio, frame_length=constants.frame_length, frame_step=constants.frame_step, pad_end=True)
+    return audio[:constants.fixed_num_frames], label
