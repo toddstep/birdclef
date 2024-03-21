@@ -36,14 +36,26 @@ def load_audio_tensor(filename, primary_label):
     # x = np.trim_zeros(x.numpy())
     # x = tf.constant(x)
 
-    non_zero = tf.where(x)
+    # non_zero = tf.where(x)
+    # first = non_zero[0][0]
+    # last = non_zero[-1][0]
+    # x = x[first:last]
+    # # x = x - tf.reduce_mean(x)  # TO DO:  uncomment so that DC component is removed
+
+    # x = x / tf.reduce_max(tf.math.abs(x))
+
+    x, _ = clean_audio(x)
+    return x, primary_label
+
+def clean_audio(audio, primary_label=-1):
+    non_zero = tf.where(audio)
     first = non_zero[0][0]
     last = non_zero[-1][0]
-    x = x[first:last]
+    audio = audio[first:last]
     # x = x - tf.reduce_mean(x)  # TO DO:  uncomment so that DC component is removed
 
-    x = x / tf.reduce_max(tf.math.abs(x))
-    return x, primary_label
+    audio = audio / tf.reduce_max(tf.math.abs(audio))
+    return audio, primary_label
 
 def shift_audio(audio, label):
     shift = tf.random.uniform((), 0, len(audio), dtype=tf.int32)

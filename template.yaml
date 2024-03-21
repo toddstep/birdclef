@@ -1,0 +1,72 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+
+Resources:
+  # https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-controlling-access-to-apis-resource-policies.html
+  # https://github.com/aws/serverless-application-model/blob/master/docs/internals/generated_resources.rst#awsserverlessapi
+  # https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-api.html
+  UploadApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: Prod
+      BinaryMediaTypes:
+        - multipart/form-data
+  FlaskFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      MemorySize: 500
+      Timeout: 60
+      PackageType: Zip
+      CodeUri: flask/
+      Handler: app.handler
+      Runtime: python3.10
+      Environment:
+        Variables:
+          BIRDSONG_FUNCTION: !Ref BirdsongFunction
+      Events:
+        TFDemoGet:
+          Type: Api
+          Properties:
+            Path: /
+            Method: get
+            RestApiId: !Ref UploadApi
+        TFDemoPut:
+          Type: Api
+          Properties:
+            Path: /
+            Method: post
+            RestApiId: !Ref UploadApi
+      Policies:
+        - Statement:
+          - Sid: BirdsongPolicy
+            Effect: Allow
+            Action: lambda:InvokeFunction
+            Resource: !GetAtt BirdsongFunction.Arn
+
+  BirdsongFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      MemorySize: 2000
+      Timeout: 60
+      PackageType: Image
+    Metadata:
+      Dockerfile: Dockerfile
+      DockerContext: ./
+      DockerTag: birdsong-recognition
+
+Outputs:
+  FlaskApi:
+    Description: "API Gateway endpoint URL for Prod stage for Flask function"
+    Value: !Sub "https://${UploadApi}.execute-api.${AWS::Region}.amazonaws.com/Prod"
+  FlaskFunction:
+    Description: "Flask Lambda Function ARN"
+    Value: !GetAtt FlaskFunction.Arn
+  FlaskFunctionIamRole:
+    Description: "Implicit IAM Role created for Flask function"
+    Value: !GetAtt FlaskFunctionRole.Arn
+  BirdsongFunction:
+    Description: "Birdsong Lambda Function ARN"
+    Value: !GetAtt BirdsongFunction.Arn
+  BirdsongFunctionIamRole:
+    Description: "Implicit IAM Role created for Birdsong function"
+    Value: !GetAtt BirdsongFunctionRole.Arn

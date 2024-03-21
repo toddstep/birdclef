@@ -1,0 +1,4 @@
+aws-wsgi
+boto3
+requests
+Flask
