@@ -1,7 +1,5 @@
-keras-tuner
 librosa
-matplotlib
 pandas
-tensorflow==2.15.1
-tensorflow-io==0.36
-tensorflow-probability==0.23
+tensorflow==2.13.1
+tensorflow-io==0.34.0
+tensorflow-probability==0.21.0

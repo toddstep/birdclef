@@ -1,5 +1,6 @@
 import os
 import pickle
+import sys
 
 import numpy as np
 
@@ -17,7 +18,7 @@ audio_stats_file = "audio_stats.pickle"
 audio_stats = pickle.load(open(audio_stats_file, 'rb') )
 print(audio_stats)
 spec_model = spectrogram_model.setup_model(num_classes, mean_variance=audio_stats)
-spec_model.load_weights('spectrogram_model_TUNE').expect_partial()
+spec_model.load_weights(sys.argv[1]).expect_partial()
 
 
 #https://www.tensorflow.org/guide/keras/serialization_and_saving 

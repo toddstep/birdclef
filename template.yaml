@@ -15,7 +15,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       MemorySize: 500
-      Timeout: 60
+      Timeout: 120
       PackageType: Zip
       CodeUri: flask/
       Handler: app.handler
@@ -36,18 +36,17 @@ Resources:
             Path: /
             Method: post
             RestApiId: !Ref UploadApi
+      # https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-policy-templates.html
       Policies:
-        - Statement:
-          - Sid: BirdsongPolicy
-            Effect: Allow
-            Action: lambda:InvokeFunction
-            Resource: !GetAtt BirdsongFunction.Arn
+        - LambdaInvokePolicy:
+            FunctionName:
+              !Ref BirdsongFunction
 
   BirdsongFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
     Properties:
       MemorySize: 2000
-      Timeout: 60
+      Timeout: 120
       PackageType: Image
     Metadata:
       Dockerfile: Dockerfile

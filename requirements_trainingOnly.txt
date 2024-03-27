@@ -1,0 +1,4 @@
+kaggle
+keras-tuner
+matplotlib
+jupyterlab

@@ -14,7 +14,7 @@ import time
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = '/tmp'
-client = boto3.client('lambda', region_name='us-east-1')
+client = boto3.client('lambda', region_name=os.environ['AWS_REGION'])
 inference_function = os.environ["BIRDSONG_FUNCTION"]
 
 def handler(event, context):
