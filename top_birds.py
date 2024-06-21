@@ -1,4 +1,5 @@
 import base64
+import mimetypes
 import os
 import pickle
 import sys
@@ -16,6 +17,7 @@ import preprocessing
 # https://stackoverflow.com/questions/15233340/getting-rid-of-n-when-using-readlines
 with open('competition_classes.txt', 'r') as f:
     competition_classes = f.read().splitlines()
+    competition_classes = [x.split(',') for x in competition_classes]
 num_classes = len(competition_classes)
 
 tmp_file = '/tmp/bbb'
@@ -47,12 +49,16 @@ def get_reduced_scores(file):
 def lambda_handler(event, context=None):
     with open(tmp_file, 'wb') as f:
         f.write(base64.b64decode(event['body'].encode()))
-    classes_scores = process_file(tmp_file)
-    # https://ellisvalentiner.com/post/serializing-numpyfloat32-json/
-    top_results = [(x[0], np.float64(x[1])) for x in classes_scores if x[1] > 0]
-    print(top_results)
-
-    return {'top_results': top_results}
+    try:
+        classes_scores = process_file(tmp_file)
+        # https://ellisvalentiner.com/post/serializing-numpyfloat32-json/
+        top_results = [(x[0], np.float64(x[1])) for x in classes_scores if x[1] > 0]
+        print(top_results)
+        return {'code': 200,
+                'top_results': top_results, }
+    except Exception as e:
+        return {'code': 500,
+                'description': 'could not process audio'}
 
 if __name__ == "__main__":
     file = sys.argv[1]

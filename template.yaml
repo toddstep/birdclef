@@ -1,71 +1,128 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 
+# https://medium.com/@kategera6/aws-sam-managing-environment-variables-in-dev-and-prod-environments-6a16c76480f2
+Parameters:
+  StageName:
+    Type: String
+    Description: Name to use for alias
+  CloudFrontAlias:
+    Type: String
+    Description: Alias for distribution
+  AliasCertificate:
+    Type: String
+    Description: Certificate ARN for distribution
+
 Resources:
   # https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-controlling-access-to-apis-resource-policies.html
   # https://github.com/aws/serverless-application-model/blob/master/docs/internals/generated_resources.rst#awsserverlessapi
   # https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-api.html
-  UploadApi:
-    Type: AWS::Serverless::Api
+  AudioBucket:
+    Type: AWS::S3::Bucket
     Properties:
-      StageName: Prod
-      BinaryMediaTypes:
-        - multipart/form-data
+      VersioningConfiguration:
+        Status: Enabled
   FlaskFunction:
     Type: AWS::Serverless::Function
+    # https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/managing-permissions-connectors.html
+    Connectors:
+      S3PutAudioConn:
+        Properties:
+          Destination:
+            Id: AudioBucket
+          Permissions:
+            - Write
     Properties:
       MemorySize: 500
-      Timeout: 120
-      PackageType: Zip
-      CodeUri: flask/
-      Handler: app.handler
-      Runtime: python3.10
+      # See note on provisioned concurrency init timeout: https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtime-environment.html
+      Timeout: 180
+      PackageType: Image
+      # https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-property-function-functionurlconfig.html
+      FunctionUrlConfig:
+        AuthType: NONE
       Environment:
         Variables:
           BIRDSONG_FUNCTION: !Ref BirdsongFunction
-      Events:
-        TFDemoGet:
-          Type: Api
-          Properties:
-            Path: /
-            Method: get
-            RestApiId: !Ref UploadApi
-        TFDemoPut:
-          Type: Api
-          Properties:
-            Path: /
-            Method: post
-            RestApiId: !Ref UploadApi
+          AUDIO_BUCKET: !Ref AudioBucket
       # https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-policy-templates.html
       Policies:
         - LambdaInvokePolicy:
             FunctionName:
               !Ref BirdsongFunction
+    Metadata:
+      Dockerfile: Dockerfile
+      DockerContext: flask/
+      DockerTag: flask
 
+  BirdFront:
+    # https://aws.amazon.com/blogs/networking-and-content-delivery/using-amazon-cloudfront-with-aws-lambda-as-origin-to-accelerate-your-web-applications/
+    # https://cloudfront-blog-resources.s3.amazonaws.com/cf-lambda-url-blog/deploy.yml
+    # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-cloudfront-distribution.html
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        PriceClass: PriceClass_100
+        Aliases:
+          - !Ref CloudFrontAlias
+        ViewerCertificate:
+          AcmCertificateArn: !Ref AliasCertificate
+          MinimumProtocolVersion: TLSv1.2_2021
+          SslSupportMethod: sni-only
+        Origins:
+          # https://rahullokurte.com/a-guide-to-using-aws-intrinsic-functions-in-your-sam-templates
+          - DomainName: !Select [2, !Split ["/", !GetAtt FlaskFunctionUrl.FunctionUrl]]
+            Id: BirdOrigin
+            CustomOriginConfig:
+              OriginProtocolPolicy: https-only
+              OriginReadTimeout: 60
+        DefaultCacheBehavior:
+          AllowedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+            - PUT
+            - PATCH
+            - POST
+            - DELETE
+          TargetOriginId: BirdOrigin
+          ViewerProtocolPolicy: redirect-to-https
+          # https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/using-managed-cache-policies.html
+          CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
+        Enabled: true
   BirdsongFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
     Properties:
       MemorySize: 2000
-      Timeout: 120
+      Timeout: 60
       PackageType: Image
+      # https://gist.github.com/danilop/75561c2660275fc328a68741f6d01066
+      ProvisionedConcurrencyConfig:
+        ProvisionedConcurrentExecutions: 1
+      AutoPublishAlias: !Ref StageName
     Metadata:
       Dockerfile: Dockerfile
       DockerContext: ./
       DockerTag: birdsong-recognition
 
 Outputs:
-  FlaskApi:
-    Description: "API Gateway endpoint URL for Prod stage for Flask function"
-    Value: !Sub "https://${UploadApi}.execute-api.${AWS::Region}.amazonaws.com/Prod"
   FlaskFunction:
     Description: "Flask Lambda Function ARN"
     Value: !GetAtt FlaskFunction.Arn
   FlaskFunctionIamRole:
     Description: "Implicit IAM Role created for Flask function"
     Value: !GetAtt FlaskFunctionRole.Arn
+  FlaskFunctionUrl:
+    Description: "URL for Flask function"
+    Value: !GetAtt FlaskFunctionUrl.FunctionUrl
   BirdsongFunction:
     Description: "Birdsong Lambda Function ARN"
     Value: !GetAtt BirdsongFunction.Arn
   BirdsongFunctionIamRole:
     Description: "Implicit IAM Role created for Birdsong function"
     Value: !GetAtt BirdsongFunctionRole.Arn
+  BirdFrontUrl:
+    Description: "Flask CloudFront domain"
+    Value: !GetAtt BirdFront.DomainName
+  AudioBucket:
+    Description: "Birdsong S3 Bucket"
+    Value: !GetAtt AudioBucket.Arn

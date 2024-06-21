@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en-US">
+<head>
+<style>
+    {# https://stackoverflow.com/questions/8083430/how-to-change-the-font-and-font-size-of-an-html-input-tag #}
+    {# https://stackoverflow.com/questions/15234958/styling-for-mobile-choose-file-button-too-small-in-ios-6 #}
+    body {
+        font-size: x-large;
+    }
+    input {
+        font-size: large;
+    }
+    input[type="file"]::-webkit-file-upload-button {
+        font-size: large;
+    }
+    button {
+        font-size: large;
+    }
+    @media (max-width: 1290px) {
+        body {
+            font-size: xxx-large;
+        }
+        input {
+            font-size: xx-large;
+        }
+        input[type="file"]::-webkit-file-upload-button {
+            font-size: xx-large;
+        }
+        button {
+            font-size: xx-large;
+        }
+    }
+    header {
+        height: 70px;
+    }
+    .upload-audio {
+    }
+    .upload-audio-results {
+        box-shadow: inset 0 3px 4px rgb(0 0 0 / 70%);
+        background-color: rgb(0 0 0 / 10%);
+        padding-bottom: 0.7rem;
+        height: 340px;
+        overflow: scroll;
+    }
+    .sound-clips {
+    }
+    .sound-clips-results {
+        box-shadow: inset 0 3px 4px rgb(0 0 0 / 70%);
+        background-color: rgb(0 0 0 / 10%);
+        padding-bottom: 0.7rem;
+        height: 340px;
+        overflow: scroll;
+    }
+</style>
+</head>
+<title>
+Automatic birdsong recognition
+</title>
+<body>
+<section class="instructions">
+</section>
+<section class="upload-audio">
+        <div>Upload audio file</div>
+        <form id="userfile" method=post enctype=multipart/form-data>
+        <div><input type=file name=file></div>
+	<div><input type=submit value='Process File'></div>
+        </form>
+</section>
+<section class="upload-audio-results">
+</section>
+<section class="sound-clips">
+        <div>Record audio</div>
+        <div><button class="record">Record</button></div>
+        <div><button class="stop">Stop</button></div>
+        <div><button class="uploadlive">Process Recording</button></div>
+</section>
+<section class="sound-clips-results">
+</section>
+
+<script>
+    {# https://developer.mozilla.org/en-US/docs/Web/API/MediaStream_Recording_API/Using_the_MediaStream_Recording_API #}
+    {# https://developer.mozilla.org/en-US/docs/Web/API/FileSystemWritableFileStream/write #}
+    {# https://developer.mozilla.org/en-US/docs/Web/API/XMLHttpRequest_API/Using_XMLHttpRequest #}
+    {# https://developer.mozilla.org/en-US/docs/Web/API/XMLHttpRequest_API/Sending_and_Receiving_Binary_Data#sending_binary_data #}
+    {# https://developer.mozilla.org/en-US/docs/Learn/Forms/Sending_forms_through_JavaScript #}
+    const form = document.querySelector("#userfile");
+    const results = document.querySelector(".upload-audio-results");
+    async function sendData(formData) {
+        const fetchOptions = {
+                             method: "POST",
+                             body: formData
+                             };
+        response = await fetch("", fetchOptions);
+        res = await response.json();
+        return res;
+    }
+    // https://stackoverflow.com/questions/11351135/create-ul-and-li-elements-in-javascript
+    function bird_list(results_section, top_birds) {
+	console.log("bird_list")
+        switch (top_birds.length) {
+            case 0:
+                results_header = 'No birds found';
+                break;
+            case 1:
+                results_header = 'Code & score for detected bird';
+                break;
+            default:
+                results_header = 'Codes & scores for detected birds';
+	}
+        results_section.appendChild(document.createTextNode(results_header));
+        ul = document.createElement('ul');
+        results_section.appendChild(ul);
+	top_birds.forEach(process_bird_item);
+        function process_bird_item(x) {
+            li = document.createElement('li');
+            ul.appendChild(li);
+            li.innerHTML = `<a href="https://ebird.org/species/${x[0][0]}"> ${x[0][1]}</a>: ${x[1].toFixed(1)}</li>`;
+	}
+    }
+    form.addEventListener("submit", (event) => {
+        event.preventDefault();
+        sendData(new FormData(form))
+            .then((res) => bird_list(results, res))
+            .catch((err) => {
+              console.error(`A POST error occured recorded: ${err}`);
+              results.innerHTML = '<p>Can not get recorded birds. Trying again. . . .</p>';
+              sendData(new FormData(form))
+              .then((res) => bird_list(results, res))
+              .catch((err2) => {
+                console.error(`Another POST error occured recorded: ${err2}`);
+                results.innerHTML = '<p>Can not get recorded birds. Aborting.</p>';
+              });
+            });
+    });
+    const record = document.querySelector(".record")
+    const stop = document.querySelector(".stop")
+    const uploadlive = document.querySelector(".uploadlive")
+    const soundClips = document.querySelector(".sound-clips-results")
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        console.log("getUserMedia supported.");
+        navigator.mediaDevices
+            .getUserMedia(
+                {
+                    audio: true,
+                },
+            )
+            .then((stream) => {
+                let chunks = [];
+                let blob;
+                let nowFormatFile;
+                const clipContainer = document.createElement("article");
+                const mediaRecorder = new MediaRecorder(stream);
+                record.onclick = () => {
+                    chunks = [];
+                    mediaRecorder.start();
+                    if (mediaRecorder.state != 'recording') {
+                      throw new Error("Unable to start recording");
+                    }
+                    console.log(mediaRecorder.state);
+                    console.log("recorder started");
+                    record.style.background = "red";
+                    record.style.color = "black";
+                };
+                mediaRecorder.ondataavailable = (e) => {
+                    chunks.push(e.data);
+                };
+                stop.onclick = () => {
+                    mediaRecorder.stop();
+                    console.log(mediaRecorder.state);
+                    console.log("recorder stopped");
+                    record.style.background = "";
+                    record.style.color = "";
+                };
+                mediaRecorder.onstop = (e) => {
+                    console.log("recorder processing");
+                    console.log(mediaRecorder.mimeType)
+
+                    const clipLabel = document.createElement("p");
+
+                    const audio = document.createElement("audio");
+                    clipContainer.classList.add("clip");
+                    soundClips.appendChild(clipContainer);
+                    audio.setAttribute("controls", "");
+
+                    clipContainer.appendChild(audio);
+                    clipContainer.appendChild(clipLabel);
+
+                    blob = new Blob(chunks, {type: mediaRecorder.mimeType});
+                    const audioURL = window.URL.createObjectURL(blob);
+                    console.log(`Blob size ${blob.size}`);
+                    if (blob.size == 0 ) {
+                      clipContainer.innerHTML = 'Failed to record any audio. Check microphone permissions.'
+                      throw new Error("Failed to record any audio");
+                    }
+                    console.log(audioURL);
+                    audio.src = audioURL;
+                    // https://stackoverflow.com/questions/25547475/save-to-local-file-from-blob
+                    var link = document.createElement("a");
+                    link.href = audioURL;
+                    const localeDateOptions = {year: "numeric",
+                                               month: "2-digit",
+                                               day: "2-digit",
+                                               hour: "2-digit",
+                                               minute: "2-digit",
+                                               second: "2-digit",
+                                               hour12: "false"}
+                    const nowFormat = new Date(Date.now()).toLocaleString('ko', localeDateOptions).replaceAll(/\D/g, "");
+                    nowFormatFile = "bird_" + nowFormat
+                    link.download = nowFormatFile
+                    link.innerHTML = "<p>Click to download</p>";
+                    clipContainer.appendChild(link);
+                };
+                uploadlive.onclick = () => {
+                    console.log('Processing recording')
+                    // https://franzeus.medium.com/record-audio-in-js-and-upload-as-wav-or-mp3-file-to-your-backend-1a2f35dea7e8
+                    const formData = new FormData();
+                    formData.append("file", blob, nowFormatFile);
+                    formData.append("type", blob.type);
+                    sendData(formData)
+                        .then((res) => bird_list(clipContainer, res))
+                        .catch((err) => {
+                          console.error('A');
+                          console.error(mediaRecorder.state);
+                          console.error(`A POST error occured live: ${err}`);
+                          clipContainer.innerHTML = '<p>Can not get live birds. Trying again. . . .</p>';
+                          sendData(new FormData(form))
+                          .then((res) => bird_list(clipContainer, res))
+                          .catch((err2) => {
+                            console.error(`Another POST error occured live: ${err2}`);
+                            clipContainer.innerHTML = '<p>Can not get live birds. Aborting.</p>';
+                          });
+                        });
+                };
+            })
+            .catch((err) => {
+                console.error(`The following getUserMedia error occured: ${err}`);
+                soundClips.innerHTML = 'Check microphone permissions.'
+                record.disabled = true;
+                stop.disabled = true;
+            });
+    }
+</script>

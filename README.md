@@ -82,11 +82,13 @@ python export_model.py ../birdclef-checkpoints/spectrogram_model_TUNE
     * On Ubuntu, follow [Installing Docker Engine on Ubuntu](https://docs.docker.com/engine/install/ubuntu/).
 * Follow the [AWS SAM prerequisites](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/prerequisites.html).
 * Install [AWS SAM CLI](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html)
+* Set up a domain and hosted zone in [Route 53](https://us-east-1.console.aws.amazon.com/route53/v2/home) for the demo website.
+* Create a certificate in [AWS Certificate Manager(ACM)](https://us-east-1.console.aws.amazon.com/acm/home) for the domain.
 * Build stack and deploy (see Steps 2 and 3 of [Tutorial: Deploying a Hello World application](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-getting-started-hello-world.html)):
-    * Answer `y` when asked (twice):
-      ```FlaskFunction has no authentication. Is this okay? ```
+    * Answer `y` when asked:
+      ```FlaskFunction Function Url has no authentication. Is this okay? ```
 ```
 sam build -u
 sam deploy --guided
 ```
-* The deployed CloudFormation output `FlaskApi` contains the URL for the demo.
+* The deployed CloudFormation output `BirdFrontUrl` contains the URL for the demo.

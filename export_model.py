@@ -12,6 +12,7 @@ import constants
 # https://stackoverflow.com/questions/15233340/getting-rid-of-n-when-using-readlines
 with open('competition_classes.txt', 'r') as f:
     competition_classes = f.read().splitlines()
+    competition_classes = [x.split(',') for x in competition_classes]
 num_classes = len(competition_classes)
 
 audio_stats_file = "audio_stats.pickle"

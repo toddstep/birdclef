@@ -4,59 +4,76 @@
 import json
 import os
 import base64
-import requests
 import awsgi
 import boto3
-from flask import Flask, flash, request, redirect
+from flask import Flask, flash, render_template, request
 from werkzeug.utils import secure_filename
+import subprocess
 
 import time
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = '/tmp'
-client = boto3.client('lambda', region_name=os.environ['AWS_REGION'])
+lambda_client = boto3.client('lambda', region_name=os.environ['AWS_REGION'])
+s3_client = boto3.client('s3', region_name=os.environ['AWS_REGION'])
 inference_function = os.environ["BIRDSONG_FUNCTION"]
+audio_bucket = os.environ["AUDIO_BUCKET"]
 
 def handler(event, context):
-    print(event['headers'])
-    print(event['multiValueHeaders'])
+    # https://github.com/slank/awsgi/issues/73
+    if 'httpMethod' not in event:
+        event['httpMethod'] = event['requestContext']['http']['method']
+    if 'path' not in event:
+        event['path'] = event['requestContext']['http']['path']
+    if 'queryStringParameters' not in event:
+        event['queryStringParameters'] = {}
+    app.logger.info(event['headers'])
     return awsgi.response(app, event, context)
+
+def get_response(fname):
+    with open(fname, 'rb') as f:
+        payload_body = base64.b64encode(f.read()).decode('utf-8')
+    response = lambda_client.invoke(FunctionName=inference_function, Payload=json.dumps({'body': payload_body }))
+    response = json.loads(response['Payload'].read())
+    return response
 
 @app.route("/", methods=['POST'])
 def upload_file():
-    if 'file' not in request.files:
-        flash('No file part')
-        return redirect(request.url)
-    else:
+    print("FILES %s",request.files)
+    print("DATA %d",len(request.data))
+    if 'file' in request.files:
         file = request.files['file']
         if file.filename == '':
-            flash('Empty filename')
-            return redirect(request.url)
+            flash('No filename')
+            return {"code": 500,
+                    "description": "No filename"}
         else:
-            sec_filename = os.path.join(app.config['UPLOAD_FOLDER'], secure_filename(file.filename))
-            file.save( sec_filename)
-            print("SEC_FILENAME", sec_filename)
-            with open(sec_filename, 'rb') as f:
-                payload_body = base64.b64encode(f.read()).decode('utf-8')
-            response = client.invoke(FunctionName=inference_function, Payload=json.dumps({'body': payload_body }))
-            response = json.loads(response['Payload'].read())
-            top_results = response['top_results']
-            if len(top_results) > 0:
-                result_str = "Code for top bird" if len(top_results) == 1 else "Codes for top birds"
-                current_result = [f"{result_str} in {file.filename}:"] + [f"<li><a href=\"https://ebird.org/species/{bird_code}\"> {bird_code}</a>: {bird_score:.1f}</li>" for bird_code, bird_score in top_results]
-            else:
-                current_result = [f"No birds found in {file.filename}."]
-            return request_file("<p>"+"".join(current_result)+"</p>")
+            sec_filename = secure_filename(file.filename)
+            local_filename = os.path.join(app.config['UPLOAD_FOLDER'], sec_filename)
+            extract_filename = local_filename.rsplit(".", 1)[0] + "_FFMPEG.ogg"
+            print("SEC_FILENAME", local_filename)
+            file.save(local_filename)
+    else:
+        flash('No file')
+        return {"code": 500,
+                "description": "No file"}
+
+    put_response = s3_client.upload_file(local_filename, audio_bucket, sec_filename)
+    print("UPLOAD_FILE", put_response)
+    response = get_response(local_filename)
+    print("RESPONSE", response)
+    if response['code'] == 500:
+        print("Could not process original format")
+        print("Converting to OGG")
+        # https://github.com/riad-azz/audio-extract/blob/master/audio_extract/ffmpeg.py
+        # https://apple.stackexchange.com/questions/13221/whats-the-best-way-to-extract-audio-from-a-video-file
+        # subprocess.run(['ls','-l','/tmp'])
+        if os.path.exists(extract_filename):
+            os.remove(extract_filename)
+        subprocess.run(['ffmpeg', '-v', 'warning', '-i', local_filename, '-vn', '-acodec', 'libvorbis', extract_filename,])
+        response = get_response(extract_filename)
+    return response['top_results']
 
 @app.route("/", methods=['GET'])
-def request_file(prev_result=''):
-    return f'''
-    <!doctype html>
-    <p>Upload audio file</p>
-    <form method=post enctype=multipart/form-data>
-      <input type=file name=file>
-      <input type=submit value=Upload>
-    </form>
-    {prev_result}
-    '''
-
+def request_file():
+    return render_template('get.html')

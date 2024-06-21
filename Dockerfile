@@ -5,7 +5,8 @@ FROM public.ecr.aws/lambda/python:3.10
 
 
 COPY requirements.txt ./
-RUN python3.10 -m pip install -r requirements.txt
+# https://stackoverflow.com/questions/45594707/what-is-pips-no-cache-dir-good-for
+RUN python3.10 -m pip install librosa pandas tensorflow-cpu==2.13.1 tensorflow-io==0.34.0 tensorflow-probability==0.21.0 --no-cache-dir
 COPY *.py ./
 COPY birdmodeling ./birdmodeling
 COPY birdtraining ./birdtraining
