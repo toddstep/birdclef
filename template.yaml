@@ -92,12 +92,12 @@ Resources:
   BirdsongFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
     Properties:
-      MemorySize: 2000
+      MemorySize: 10240
       Timeout: 60
       PackageType: Image
-      # https://gist.github.com/danilop/75561c2660275fc328a68741f6d01066
-      ProvisionedConcurrencyConfig:
-        ProvisionedConcurrentExecutions: 1
+      # # https://gist.github.com/danilop/75561c2660275fc328a68741f6d01066
+      # ProvisionedConcurrencyConfig:
+      #   ProvisionedConcurrentExecutions: 1
       AutoPublishAlias: !Ref StageName
     Metadata:
       Dockerfile: Dockerfile

@@ -54,9 +54,19 @@
 </style>
 </head>
 <title>
-Automatic birdsong recognition
+Automatic Birdsong Recognition
 </title>
 <body>
+<section class="overview">
+	<p>Automatic Birdsong Recognition</p>
+	<p>This technology is based on training data available at <a href="https://www.kaggle.com/competitions/birdsong-recognition"> Cornell Birdcall Identification</a>.</p>
+	<p>Below are two options for demonstrating this technology:</p>
+	<ul>
+		<li>Pre-recorded audio can be processed using the "Choose File" and "Process File" buttons.</li>
+		<li>Live audio can be be recorded and processed using the "Record", "Stop" and "Process Recording" buttons.</li>
+	</ul>
+	<p>This service may use "cold" serverless functions if no audio has been processed in the previous 15 minutes. So, a response could be delayed for over one minute as a new function is started.</p>
+</section>
 <section class="instructions">
 </section>
 <section class="upload-audio">
@@ -99,13 +109,13 @@ Automatic birdsong recognition
 	console.log("bird_list")
         switch (top_birds.length) {
             case 0:
-                results_header = 'No birds found';
+                results_header = 'No birds detected.';
                 break;
             case 1:
-                results_header = 'Code & score for detected bird';
+                results_header = 'Detected bird and score:';
                 break;
             default:
-                results_header = 'Codes & scores for detected birds';
+                results_header = 'Detected birds and scores:';
 	}
         results_section.appendChild(document.createTextNode(results_header));
         ul = document.createElement('ul');
@@ -114,7 +124,7 @@ Automatic birdsong recognition
         function process_bird_item(x) {
             li = document.createElement('li');
             ul.appendChild(li);
-            li.innerHTML = `<a href="https://ebird.org/species/${x[0][0]}"> ${x[0][1]}</a>: ${x[1].toFixed(1)}</li>`;
+            li.innerHTML = `<a href="https://ebird.org/species/${x[0][0]}"> ${x[0][1]}</a>: ${x[1].toFixed(2)}</li>`;
 	}
     }
     form.addEventListener("submit", (event) => {
@@ -122,13 +132,19 @@ Automatic birdsong recognition
         sendData(new FormData(form))
             .then((res) => bird_list(results, res))
             .catch((err) => {
-              console.error(`A POST error occured recorded: ${err}`);
-              results.innerHTML = '<p>Can not get recorded birds. Trying again. . . .</p>';
+              console.error(`A POST error occured file: ${err}`);
+              results.innerHTML = '<p>Can not get birds for file. Maybe process is starting up. Trying again. . . .</p>';
               sendData(new FormData(form))
               .then((res) => bird_list(results, res))
               .catch((err2) => {
-                console.error(`Another POST error occured recorded: ${err2}`);
-                results.innerHTML = '<p>Can not get recorded birds. Aborting.</p>';
+                console.error(`A second POST error occured file: ${err2}`);
+                results.innerHTML = results.innerHTML.concat('<p>Can not get birds for file. Trying once more.</p>');
+                sendData(new FormData(form))
+                .then((res) => bird_list(results, res))
+                .catch((err3) => {
+                  console.error(`A third POST error occured file: ${err3}`);
+                  results.innerHTML = results.innerHTML.concat('<p>Still can not get birds for file. Aborting.</p>');
+                });
               });
             });
     });
@@ -160,6 +176,8 @@ Automatic birdsong recognition
                     console.log("recorder started");
                     record.style.background = "red";
                     record.style.color = "black";
+                    uploadlive.style.background = "";
+                    uploadlive.style.color = "";
                 };
                 mediaRecorder.ondataavailable = (e) => {
                     chunks.push(e.data);
@@ -170,9 +188,11 @@ Automatic birdsong recognition
                     console.log("recorder stopped");
                     record.style.background = "";
                     record.style.color = "";
+                    uploadlive.style.background = "blue";
+                    uploadlive.style.color = "white";
                 };
                 mediaRecorder.onstop = (e) => {
-                    console.log("recorder processing");
+                    console.log("recorder stopped");
                     console.log(mediaRecorder.mimeType)
 
                     const clipLabel = document.createElement("p");
@@ -219,17 +239,24 @@ Automatic birdsong recognition
                     sendData(formData)
                         .then((res) => bird_list(clipContainer, res))
                         .catch((err) => {
-                          console.error('A');
                           console.error(mediaRecorder.state);
-                          console.error(`A POST error occured live: ${err}`);
-                          clipContainer.innerHTML = '<p>Can not get live birds. Trying again. . . .</p>';
-                          sendData(new FormData(form))
+                          console.error(`A POST error occured recorded: ${err}`);
+                          clipContainer.innerHTML = '<p>Can not get birds for recorded audio. Maybe process is still starting up. Trying again. . . .</p>';
+                          sendData(formData)
                           .then((res) => bird_list(clipContainer, res))
                           .catch((err2) => {
-                            console.error(`Another POST error occured live: ${err2}`);
-                            clipContainer.innerHTML = '<p>Can not get live birds. Aborting.</p>';
+                            console.error(`A second POST error occured recorded: ${err2}`);
+                            clipContainer.innerHTML = clipContainer.innerHTML.concat('<p>Can not get birds for recorded audio. Trying once more.</p>');
+                            sendData(formData)
+                            .then((res) => bird_list(clipContainer, res))
+                            .catch((err3) => {
+                              console.error(`A third POST error occured recorded: ${err3}`);
+                              clipContainer.innerHTML = clipContainer.innerHTML.concat('<p>Still can not get birds for recorded audio. Aborting.</p>');
+                            });
                           });
                         });
+                    uploadlive.style.background = "";
+                    uploadlive.style.color = "";
                 };
             })
             .catch((err) => {

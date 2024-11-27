@@ -18,4 +18,4 @@ class SetupModel:
         Returns:
             model's setup function
         """
-        return self.func(self.num_classes, self.mean_variance, hp)
+        return self.func(self.num_classes, weights='imagenet', mean_variance=self.mean_variance, hp=hp)

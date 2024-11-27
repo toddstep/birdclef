@@ -40,6 +40,7 @@ def process_file(file):
     return hits
 
 def get_reduced_scores(file):
+    # audio = preprocessing.load_audio(file)
     audio, _ = librosa.load(file, sr=constants.model_sr, mono=True)
     audio, _ = preprocessing.clean_audio(audio, None)
     framed_audio, _ = preprocessing.frame_audio(audio, None)

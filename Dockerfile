@@ -6,12 +6,12 @@ FROM public.ecr.aws/lambda/python:3.10
 
 COPY requirements.txt ./
 # https://stackoverflow.com/questions/45594707/what-is-pips-no-cache-dir-good-for
-RUN python3.10 -m pip install librosa pandas tensorflow-cpu==2.13.1 tensorflow-io==0.34.0 tensorflow-probability==0.21.0 --no-cache-dir
-COPY *.py ./
+RUN python3.10 -m pip install librosa pandas tensorflow-cpu==2.13.1 tensorflow-io==0.34.0 --no-cache-dir
+COPY constants.py preprocessing.py top_birds.py ./
 COPY birdmodeling ./birdmodeling
 COPY birdtraining ./birdtraining
 COPY birddata ./birddata
-COPY competition_classes.txt audio_stats.pickle score_threshold.pickle ./
+COPY competition_classes.txt score_threshold.pickle ./
 COPY export_model ./export_model
 
 # https://stackoverflow.com/questions/59290386/runtimeerror-at-cannot-cache-function-shear-dense-no-locator-available-fo

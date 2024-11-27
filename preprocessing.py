@@ -1,3 +1,5 @@
+import keras
+
 import librosa
 import math
 import numpy as np
@@ -10,50 +12,71 @@ import tensorflow_io as tfio
 
 import constants
 
-def tensor_string(x):
-    if isinstance(x, tf.Tensor):
-        return x.numpy().decode()
-    else:
+class LoadAudio(keras.Model):
+    def __init__(self, augment=False):
+        super().__init__()
+        self.augment = augment
+
+    def call(self, inputs):
+        # AudioIOTensor() has buggy output when dataset does parallel maps (and iterator is restarted multiple times)
+        # x = tfio.audio.AudioIOTensor(inputs, dtype='float32').to_tensor()
+        x = tf.io.read_file(inputs)
+        x = tfio.audio.decode_vorbis(x)
+
+        x = tf.reduce_mean(x, axis=1)
+        # audio_start, audio_stop = tfio.audio.trim(x, epsilon=tf.reduce_max(tf.abs(x))*1e-5, axis=0)
+        # x = x[audio_start:audio_stop]
+        x, _ = clean_audio(x, -1)
+        if self.augment:
+            x, _ = chop_audio(x, -1)
         return x
+
+load_audio_augment = LoadAudio(augment=True)
+load_audio = LoadAudio(augment=False)
+
+# def tensor_string(x):
+#     if isinstance(x, tf.Tensor):
+#         return x.numpy().decode()
+#     else:
+#         return x
     
-def ogg_fn(filename):
-    return os.path.join(constants.base_dir, 'train_audio', tensor_string(filename))
+# def ogg_fn(filename):
+#     return os.path.join(constants.base_dir, 'train_audio', tensor_string(filename))
 
 def duration(x):
-    return librosa.get_duration(path=ogg_fn(tf.constant(x)))
+    return librosa.get_duration(path=x)
+    # return librosa.get_duration(path=ogg_fn(tf.constant(x)))
 
-def load_audio_tensor(filename, primary_label):
-    # https://www.tensorflow.org/tutorials/audio/transfer_learning_audio
-    # in_sr = librosa.get_samplerate(ogg_fn(filename))
-    filename_ogg = tf.py_function(ogg_fn, [filename], tf.string)
-    x = tf.io.read_file(filename_ogg)
-    x = tfio.audio.decode_vorbis(x)
-    # x = tfio.audio.decode_mp3(x)
-    # x = tfio.audio.resample(x, in_sr, constants.model_sr)
-    x = x[:, 0]
+# def load_audio_tensor(filename, primary_label):
+#     # https://www.tensorflow.org/tutorials/audio/transfer_learning_audio
+#     # filename_ogg = tf.py_function(ogg_fn, [filename], tf.string)
+#     # x = tf.io.read_file(filename_ogg)
+    
+#     # x = tf.io.read_file(filename)
+#     # x = tfio.audio.decode_vorbis(x)
+#     # x = x[:, 0]
 
-    # x = np.trim_zeros(x.numpy())
-    # x = tf.constant(x)
+#     audio_tensor = tfio.audio.AudioIOTensor(filename, dtype='float32')
+#     x = audio_tensor.to_tensor()[:,0]
+#     # eps = tf.reduce_max(tf.abs(x))*1e-5
+#     # audio_start, audio_stop = tfio.audio.trim(x, epsilon=eps, axis=0)
+#     # x = x[audio_start:audio_stop]
 
-    # non_zero = tf.where(x)
-    # first = non_zero[0][0]
-    # last = non_zero[-1][0]
-    # x = x[first:last]
-    # # x = x - tf.reduce_mean(x)  # TO DO:  uncomment so that DC component is removed
 
-    # x = x / tf.reduce_max(tf.math.abs(x))
-
-    x, _ = clean_audio(x)
-    return x, primary_label
+#     # # x = x - tf.reduce_mean(x)  # TO DO:  uncomment so that DC component is removed
+#     x, _ = clean_audio(x)
+#     return x, primary_label
 
 def clean_audio(audio, primary_label=-1):
-    non_zero = tf.where(audio)
-    first = non_zero[0][0]
-    last = non_zero[-1][0]
-    audio = audio[first:last]
+    largest_val = tf.reduce_max(tf.abs(audio))
+    silence_thresh = largest_val * 1e-5
+    non_silence = tf.where(tf.abs(audio) > silence_thresh)
+    first = non_silence[0][0]
+    last = non_silence[-1][0]
+    audio = audio[first:last+1]
     # x = x - tf.reduce_mean(x)  # TO DO:  uncomment so that DC component is removed
 
-    audio = audio / tf.reduce_max(tf.math.abs(audio))
+    audio = audio / largest_val
     return audio, primary_label
 
 def shift_audio(audio, label):
@@ -73,8 +96,9 @@ def chop_audio(audio, label):
     """
     if len(audio)>constants.frame_length:
         max_chop = len(audio)-constants.frame_length
-        chop_samples = tf.random.uniform((), 0, len(audio), dtype=tf.int32)
-        # shift = tf.py_function(lambda x: random.randint(0, x), [len(audio)], tf.int32)
+        # NOTE: there appears to be a seed that is reset for each iteration through a dataset,
+        # Making the same amount (sometimes) chopped from an audio clip
+        chop_samples = tf.random.uniform((), 0, max_chop+1, dtype=tf.int32)
         return audio[chop_samples:], label
     else:
         return audio, label
@@ -106,7 +130,7 @@ def combine_recordings(orig_audio, label, index_filename_list, weight=None):
     other_file = tf.py_function(lambda x: random.choices(index_filename_list[x]),
                               [label],
                               tf.string)
-    other_audio, other_label = load_audio_tensor(other_file, label)
+    other_audio = load_audio_augment(other_file)
     other_audio = match_lengths(orig_audio=orig_audio, other_audio=other_audio)
     
     if weight is None:

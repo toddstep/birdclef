@@ -1,3 +1,5 @@
+import os
+
 import pandas as pd
 import constants
 from preprocessing import duration
@@ -16,10 +18,11 @@ class Data:
             self.df['primary_label'] = self.df['ebird_code']
             self.df['filename'] = self.df['filename'].apply(lambda x: x.split('.')[0] + '.ogg')
             self.df['filename'] = self.df[['primary_label', 'filename']].apply(lambda x: '/'.join(x), axis=1)
+        self.df['full_path'] = self.df['filename'].apply(lambda x: os.path.join(constants.base_dir, 'train_audio', x))
         self.competition_classes = sorted(self.df.primary_label.unique())
         self.num_classes = len(self.competition_classes)
-        self.df['primary_index'] = self.df['primary_label'].apply(lambda x: self.competition_classes.index(x))
-        self.df['duration'] = self.df['filename'].apply(duration)
+        self.df['primary_index'] = self.df['primary_label'].apply(lambda x: self.competition_classes.index(x)).astype('int32')
+        self.df['duration'] = self.df['full_path'].apply(duration)
         self.df, _ = Data.get_counts(self.df, 'primary_label_freq')
         print("NUM_CLASSES", self.num_classes)
 
@@ -92,7 +95,7 @@ def get_train_filenames_per_index(df, classes):
         list: each element contains a list of filenames
     """
     #https://www.statology.org/pandas-groupby-list/
-    filenames_per_label = df.groupby('primary_label')['filename']
+    filenames_per_label = df.groupby('primary_label')['full_path']
     filenames_per_label = dict(filenames_per_label.agg(list))
     filenames_list = [filenames_per_label[k] for k in classes]
     return filenames_list

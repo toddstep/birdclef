@@ -2,4 +2,3 @@ librosa
 pandas
 tensorflow==2.13.1
 tensorflow-io==0.34.0
-tensorflow-probability==0.21.0
